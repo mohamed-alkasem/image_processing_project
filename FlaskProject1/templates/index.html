@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Görüntü İşleme</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            padding: 20px;
+        }
+        .images {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            width: 80%;
+        }
+        .images img {
+            max-width: 45%;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #videoElement {
+            display: none;
+            max-width: 45%;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #captureButton {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        #captureButton:hover {
+            background-color: #1976D2;
+        }
+        select, input[type="file"], input[type="text"] {
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 200px;
+        }
+    </style>
+    <script>
+        function handleOptionChange() {
+            const option = document.getElementById('option').value;
+            document.getElementById('file').style.display = option === 'upload' ? 'block' : 'none';
+            document.getElementById('openCameraButton').style.display = option === 'camera' ? 'block' : 'none';
+            document.getElementById('submit').style.display = option === 'upload' ? 'block' : 'none';
+            document.getElementById('captureButton').style.display = option === 'camera' ? 'block' : 'none';
+            document.getElementById('videoElement').style.display = 'none';
+        }
+
+        function uploadImage() {
+            var formData = new FormData();
+            formData.append('file', document.getElementById('file').files[0]);
+            formData.append('algorithm', document.getElementById('algorithm').value);
+
+            fetch('/process_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                var url = URL.createObjectURL(blob);
+                document.getElementById('modifiedImage').src = url;
+
+                var reader = new FileReader();
+                reader.onload = function (e) {
+                    document.getElementById('originalImage').src = e.target.result;
+                };
+                reader.readAsDataURL(document.getElementById('file').files[0]);
+
+                // Enable save button
+                document.getElementById('saveButton').style.display = 'block';
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function openCamera() {
+            const video = document.getElementById('videoElement');
+            video.style.display = 'block';
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                    video.play();
+                })
+                .catch(error => console.error('Error accessing camera:', error));
+        }
+
+        function captureImage() {
+            const video = document.getElementById('videoElement');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataURL = canvas.toDataURL('image/jpeg');
+            video.srcObject.getTracks().forEach(track => track.stop());
+            video.style.display = 'none';
+
+            document.getElementById('originalImage').src = dataURL;
+
+            var formData = new FormData();
+            formData.append('file', dataURLToBlob(dataURL));
+            formData.append('algorithm', document.getElementById('algorithm').value);
+
+            fetch('/process_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                var url = URL.createObjectURL(blob);
+                document.getElementById('modifiedImage').src = url;
+
+                // Enable save button
+                document.getElementById('saveButton').style.display = 'block';
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function dataURLToBlob(dataURL) {
+            var binary = atob(dataURL.split(',')[1]);
+            var array = [];
+            for (var i = 0; i < binary.length; i++) {
+                array.push(binary.charCodeAt(i));
+            }
+            return new Blob([new Uint8Array(array)], { type: 'image/jpeg' });
+        }
+
+        function saveImage() {
+            const link = document.createElement('a');
+            link.href = document.getElementById('modifiedImage').src;
+            link.download = 'filtered_image.jpg';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Bir Görüntü Yükleyin veya Fotoğraf Çekin</h1>
+        <select id="option" onchange="handleOptionChange()">
+            <option value="">Seçiniz</option>
+            <option value="upload">Görüntü Yükle</option>
+            <option value="camera">Kamera ile Fotoğraf Çek</option>
+        </select><br><br>
+        <form onsubmit="event.preventDefault(); uploadImage();">
+            <input type="file" id="file" name="file" style="display: none;"><br><br>
+            <label for="algorithm">Kullanılacak Algoritma:</label>
+            <select id="algorithm" name="algorithm">
+                <option value="sobel">Sobel Kenar Bulma</option>
+                <option value="laplacian">Laplacian Kenar Bulma</option>
+                <option value="face_detection">Yüz Tanıma</option>
+                <option value="shi_tomasi">Shi-Tomasi Köşe Tespiti</option>
+                <option value="roberts">Roberts Kenar Bulma</option>
+            </select><br><br>
+            <input type="submit" id="submit" value="Yükle" style="display: none;">
+        </form>
+        <button id="openCameraButton" onclick="openCamera()" style="display: none;">Kamera Aç</button>
+        <video id="videoElement" autoplay></video>
+        <button id="captureButton" onclick="captureImage()" style="display: none;">Fotoğraf Çek</button>
+        <button id="saveButton" onclick="saveImage()" style="display: none;">Görüntüyü Kaydet</button>
+        <div class="images">
+            <div>
+                <h2>Orijinal Görüntü:</h2>
+                <img id="originalImage" src="" alt="Orijinal Görüntü">
+            </div>
+            <div>
+                <h2>İşlenmiş Görüntü:</h2>
+                <img id="modifiedImage" src="" alt="İşlenmiş Görüntü">
+            </div>
+        </div>
+    </div>
+</body>
+</html>
